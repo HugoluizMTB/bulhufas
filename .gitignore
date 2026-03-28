@@ -1,0 +1,8 @@
+bin/
+*.exe
+*.db
+*.sqlite
+.env
+.DS_Store
+web/node_modules/
+web/dist/
