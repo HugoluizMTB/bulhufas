@@ -5,7 +5,7 @@ Thanks for your interest in contributing!
 ## Setup
 
 ```bash
-# Prerequisites: Go 1.22+, Ollama
+# Prerequisites: Go 1.22+ with CGO enabled
 git clone https://github.com/HugoluizMTB/bulhufas.git
 cd bulhufas
 go mod download

@@ -1,6 +1,9 @@
 bin/
+data/
 *.exe
 *.db
+*.db-shm
+*.db-wal
 *.sqlite
 .env
 .DS_Store

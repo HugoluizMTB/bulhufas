@@ -59,7 +59,24 @@ func (h *Handler) Search(ctx context.Context, query domain.SearchQuery) ([]domai
 		return nil, err
 	}
 
-	return h.vectors.Search(ctx, emb, query.Limit)
+	vectorResults, err := h.vectors.Search(ctx, emb, query.Limit)
+	if err != nil {
+		return nil, err
+	}
+
+	var results []domain.SearchResult
+	for _, vr := range vectorResults {
+		chunk, err := h.store.GetChunk(ctx, vr.Chunk.ID)
+		if err != nil {
+			continue
+		}
+		results = append(results, domain.SearchResult{
+			Chunk: *chunk,
+			Score: vr.Score,
+		})
+	}
+
+	return results, nil
 }
 
 func (h *Handler) UpdateChunkStatus(ctx context.Context, id string, status domain.Status) error {

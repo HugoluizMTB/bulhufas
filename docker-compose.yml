@@ -8,34 +8,13 @@ services:
     environment:
       - PORT=8420
       - DATA_DIR=/data
-      - OLLAMA_URL=http://ollama:11434
-      - EMBED_MODEL=nomic-embed-text
-      - LOG_LEVEL=info
-    depends_on:
-      ollama:
-        condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["/bulhufas", "healthcheck"]
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8420/healthz"]
       interval: 30s
       timeout: 3s
       retries: 3
-      start_period: 10s
-
-  ollama:
-    image: ollama/ollama:latest
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama-models:/root/.ollama
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
       start_period: 30s
-    restart: unless-stopped
 
 volumes:
   bulhufas-data:
-  ollama-models:

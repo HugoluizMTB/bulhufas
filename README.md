@@ -9,7 +9,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/HugoluizMTB/bulhufas)](https://goreportcard.com/report/github.com/HugoluizMTB/bulhufas)
 [![License](https://img.shields.io/github/license/HugoluizMTB/bulhufas)](LICENSE)
 
-[Getting Started](#getting-started) · [How It Works](#how-it-works) · [Self-Host](#self-hosting) · [Contributing](CONTRIBUTING.md)
+[Getting Started](#getting-started) · [How It Works](#how-it-works) · [API](#api) · [Self-Host](#self-hosting) · [Contributing](CONTRIBUTING.md)
 
 </div>
 
@@ -17,27 +17,28 @@
 
 Teams make decisions in Slack, WhatsApp, and meetings — then none of it reaches the PM tool. **bulhufas** captures raw conversations, extracts structured project artifacts (decisions, action items, blockers, scope changes), and makes them searchable via semantic embeddings.
 
-It works as an [MCP server](https://modelcontextprotocol.io), so your AI coding assistant becomes the interface.
+Single binary. No external dependencies. Embeddings run in-process.
 
 ## Features
 
-- **Conversation → Structure** — Paste raw chat, get structured chunks: decisions, action items, blockers, requirements, scope changes
+- **Conversation to Structure** — Paste raw chat, get structured chunks: decisions, action items, blockers, requirements, scope changes
 - **Semantic Search** — Find context by meaning, not keywords. "What did we decide about auth?" finds the right chunk even if "auth" isn't in the text
 - **CRUD on Knowledge** — Update status, add context, archive outdated chunks. Your knowledge base stays current
-- **MCP Native** — Works directly inside Claude Code, Cursor, or any MCP-compatible client
-- **Single Binary** — One Go binary, embedded vector store. No external databases required
-- **Self-Hostable** — Docker image under 15MB. Deploy anywhere: Coolify, Railway, Hetzner, AWS, GCP
+- **Single Binary** — One Go binary with embedded vector store (chromem-go) and embedding model (hugot/all-MiniLM-L6-v2). No Ollama, no Docker, no external processes
+- **Self-Hostable** — Deploy anywhere: Coolify, Railway, Hetzner, AWS, GCP. Runs on a 2GB VPS
 
 ## How It Works
 
+![Ingestion and retrieval flow](docs/flow.png)
+
 ```
 You paste a conversation into your AI assistant
-         ↓
+         |
 The LLM extracts structured chunks with metadata
-         ↓
-bulhufas stores chunks + embeddings (via Ollama)
-         ↓
-Later: "what's pending from last week?" → semantic search returns relevant chunks
+         |
+bulhufas stores chunks + generates embeddings in-process (hugot)
+         |
+Later: "what's pending from last week?" -> semantic search returns relevant chunks
 ```
 
 ### What Gets Captured
@@ -53,64 +54,165 @@ Later: "what's pending from last week?" → semantic search returns relevant chu
 | `research_finding` | "pgvector outperforms pinecone for our dataset size" |
 | `status_update` | "Payment integration is live in staging" |
 
-## Getting Started
+## Installation
 
-### Prerequisites
-
-- [Go 1.22+](https://go.dev/dl/)
-- [Ollama](https://ollama.ai) (for local embeddings)
-- [Docker](https://docs.docker.com/get-docker/) (optional, for containerized deployment)
-
-### Install
+### From source
 
 ```bash
-go install github.com/HugoluizMTB/bulhufas/cmd/server@latest
+# Requires Go 1.22+ with CGO enabled
+git clone https://github.com/HugoluizMTB/bulhufas.git
+cd bulhufas
+make build
 ```
 
-### Run with Ollama
+### Docker
 
 ```bash
-# Pull the embedding model (~274MB, runs on CPU)
-ollama pull nomic-embed-text
-
-# Start bulhufas
-bulhufas
+docker build -t bulhufas .
 ```
 
-### Use as MCP Server
+On first run, the embedding model (all-MiniLM-L6-v2, ~80MB) is downloaded automatically to `./data/models/`.
 
-Add to your Claude Code or Cursor config:
+## Quick Start
 
-```json
-{
-  "mcpServers": {
-    "bulhufas": {
-      "command": "bulhufas",
-      "args": ["--mcp"]
-    }
-  }
-}
+### 1. Build
+
+```bash
+make build
 ```
 
-Then in your AI assistant:
+### 2. Register as MCP server in Claude Code
+
+```bash
+claude mcp add --transport stdio --scope user bulhufas -- /absolute/path/to/bulhufas/bin/bulhufas --mcp
+```
+
+### 3. Restart Claude Code
+
+The following tools become available:
+
+| Tool | Description |
+|------|-------------|
+| `save_conversation` | Save a conversation with extracted structured chunks |
+| `search` | Semantic search across all stored chunks |
+| `list_chunks` | List chunks with optional type/status filters |
+| `update_status` | Update chunk status by ID |
+| `delete_chunk` | Delete a chunk by ID |
+| `list_actions` | List all pending action items |
+
+### Run as HTTP Server
+
+```bash
+./bin/bulhufas
+```
+
+Starts an HTTP API on port 8420. Use `--mcp` flag for MCP stdio mode instead.
+
+### Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `8420` | Server port |
+| `DATA_DIR` | `./data` | Persistent storage directory (SQLite db, model files, vector index) |
+
+## API
+
+### Save a conversation with chunks
+
+```bash
+curl -X POST http://localhost:8420/api/conversations \
+  -H "Content-Type: application/json" \
+  -d '{
+    "source": "whatsapp",
+    "summary": "Discussion about database access",
+    "participants": ["renan", "hugo"],
+    "chunks": [
+      {
+        "content": "Renan needs read-only access to PostgreSQL",
+        "type": "decision",
+        "tags": ["infra", "postgres"],
+        "people": ["renan"],
+        "status": "pending",
+        "action_item": "Create read-only credentials"
+      }
+    ]
+  }'
+```
+
+### Semantic search
+
+```bash
+curl -X POST http://localhost:8420/api/search \
+  -H "Content-Type: application/json" \
+  -d '{"text": "database access", "limit": 5}'
+```
+
+### List chunks with filters
+
+```bash
+curl "http://localhost:8420/api/chunks?type=blocker&status=pending"
+```
+
+### List pending action items
+
+```bash
+curl http://localhost:8420/api/actions
+```
+
+### Update chunk status
+
+```bash
+curl -X PATCH http://localhost:8420/api/chunks/{id}/status \
+  -H "Content-Type: application/json" \
+  -d '{"status": "resolved"}'
+```
+
+### Delete a chunk
+
+```bash
+curl -X DELETE http://localhost:8420/api/chunks/{id}
+```
+
+### Health check
+
+```bash
+curl http://localhost:8420/healthz
+```
+
+## Architecture
 
 ```
-@bulhufas save this conversation [paste chat]
-@bulhufas what's pending from renan?
-@bulhufas context about card reconciliation
-@bulhufas mark chunk-abc as resolved
+cmd/server/          -> entrypoint, wires everything together
+internal/
+  domain/            -> core types: Conversation, Chunk, WorkItem, Relation
+  mcp/               -> HTTP server, handlers, request/response logic
+  store/             -> persistence interface + SQLite implementation
+  vectorstore/       -> embedded vector search via chromem-go
+  embedder/          -> in-process embeddings via hugot (all-MiniLM-L6-v2)
+scripts/             -> test scripts
+web/                 -> React dashboard (future)
 ```
+
+All external dependencies are behind interfaces. Swap SQLite for Postgres, or chromem-go for pgvector — without touching business logic.
+
+### Stack
+
+| Component | Library | Runs in-process? |
+|-----------|---------|-----------------|
+| Embedding | hugot + all-MiniLM-L6-v2 (384 dim) | Yes |
+| Vector store | chromem-go | Yes |
+| Database | SQLite (mattn/go-sqlite3) | Yes |
+| HTTP server | Go stdlib net/http | Yes |
+
+No Ollama. No Docker. No external databases. One binary.
 
 ## Self-Hosting
 
 ### Docker
 
 ```bash
-docker run -d \
-  --name bulhufas \
-  -p 8420:8420 \
-  -v bulhufas-data:/data \
-  ghcr.io/hugoluizmtb/bulhufas:latest
+docker build -t bulhufas .
+docker run -d --name bulhufas -p 8420:8420 -v bulhufas-data:/data bulhufas
 ```
 
 ### Docker Compose
@@ -121,43 +223,17 @@ cd bulhufas
 docker compose up -d
 ```
 
-See [docker-compose.yml](docker-compose.yml) for the full configuration including Ollama.
-
-### Environment Variables
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `8420` | Server port |
-| `DATA_DIR` | `/data` | Persistent storage directory |
-| `OLLAMA_URL` | `http://localhost:11434` | Ollama API endpoint |
-| `EMBED_MODEL` | `nomic-embed-text` | Embedding model name |
-| `LOG_LEVEL` | `info` | Log verbosity: debug, info, warn, error |
-
-## Architecture
-
-```
-cmd/server/          → entrypoint
-internal/
-├── domain/          → core types: Conversation, Chunk, WorkItem, Relation
-├── mcp/             → MCP protocol handlers
-├── store/           → persistence interface + SQLite implementation
-├── vectorstore/     → embedded vector search (chromem-go)
-├── embedder/        → Ollama client for generating embeddings
-└── chunker/         → text chunking logic
-web/                 → React dashboard (future)
-```
-
-All external dependencies are behind interfaces. Swap Ollama for OpenAI, SQLite for Postgres, or chromem-go for pgvector — without touching business logic.
-
 ## Roadmap
 
 - [x] Core domain types and interfaces
-- [x] MCP handler with save/search/update/delete
-- [ ] SQLite store implementation
-- [ ] Ollama embedder integration
-- [ ] chromem-go vector store
-- [ ] MCP server protocol (stdio transport)
-- [ ] Docker image
+- [x] HTTP API with save/search/update/delete
+- [x] SQLite store implementation
+- [x] In-process embeddings via hugot (all-MiniLM-L6-v2)
+- [x] chromem-go vector store
+- [x] Semantic search with SQLite enrichment
+- [x] Action items endpoint
+- [x] MCP server protocol (stdio transport via mcp-go)
+- [x] Docker image
 - [ ] React dashboard
 - [ ] Slack plugin
 - [ ] Remote MCP via SSE transport
