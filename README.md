@@ -56,7 +56,7 @@ Later: "what's pending from last week?" -> semantic search returns relevant chun
 
 ## Installation
 
-### From source
+### 1. Build from source
 
 ```bash
 # Requires Go 1.22+ with CGO enabled
@@ -65,31 +65,19 @@ cd bulhufas
 make build
 ```
 
-### Docker
-
-```bash
-docker build -t bulhufas .
-```
-
-On first run, the embedding model (all-MiniLM-L6-v2, ~80MB) is downloaded automatically to `./data/models/`.
-
-## Quick Start
-
-### 1. Build
-
-```bash
-make build
-```
-
-### 2. Register as MCP server in Claude Code
+### 2. Add to Claude Code
 
 ```bash
 claude mcp add --transport stdio --scope user bulhufas -- /absolute/path/to/bulhufas/bin/bulhufas --mcp
 ```
 
-### 3. Restart Claude Code
+> Replace `/absolute/path/to` with the actual path where you cloned the repo.
+> Use `--scope user` to make it available across all your projects.
+> Use `--scope project` to restrict it to the current project only.
 
-The following tools become available:
+### 3. Restart Claude Code and verify
+
+Run `/mcp` inside Claude Code. You should see `bulhufas` connected with 6 tools:
 
 | Tool | Description |
 |------|-------------|
@@ -100,7 +88,9 @@ The following tools become available:
 | `delete_chunk` | Delete a chunk by ID |
 | `list_actions` | List all pending action items |
 
-### Run as HTTP Server
+On first run, the embedding model (all-MiniLM-L6-v2, ~80MB) is downloaded automatically to `./data/models/`.
+
+### Run as HTTP Server (optional)
 
 ```bash
 ./bin/bulhufas
@@ -208,6 +198,14 @@ No Ollama. No Docker. No external databases. One binary.
 
 ## Self-Hosting
 
+### Binary
+
+```bash
+CGO_ENABLED=1 GOOS=linux go build -o bulhufas ./cmd/server
+scp bulhufas your-server:/opt/bulhufas/
+ssh your-server '/opt/bulhufas/bulhufas'
+```
+
 ### Docker
 
 ```bash
@@ -222,6 +220,8 @@ git clone https://github.com/HugoluizMTB/bulhufas.git
 cd bulhufas
 docker compose up -d
 ```
+
+Works with Coolify, Railway, Hetzner, AWS, GCP, Oracle Cloud — anything that runs Docker.
 
 ## Roadmap
 
