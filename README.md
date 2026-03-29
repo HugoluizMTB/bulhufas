@@ -15,6 +15,20 @@
 
 ---
 
+### Why "bulhufas"?
+
+*Bulhufas* is Brazilian Portuguese slang for "zilch", "diddly-squat", "bupkis" — absolutely nothing.
+
+As in: "How much does Claude know about that decision your team made on WhatsApp last Thursday?" *Bulhufas.*
+
+"What about that blocker someone mentioned in standup?" *Bulhufas.*
+
+"And that architecture decision from two sprints ago?" You guessed it. *Bulhufas.*
+
+Now it knows.
+
+---
+
 Teams make decisions in Slack, WhatsApp, and meetings — then none of it reaches the PM tool. **bulhufas** captures raw conversations, extracts structured project artifacts (decisions, action items, blockers, scope changes), and makes them searchable via semantic embeddings.
 
 Single binary. No external dependencies. Embeddings run in-process.
